@@ -9,23 +9,45 @@ class RegexMatcher{
 	public:
 		RegexMatcher(const std::string &expression) {
 			mDfa.addColumn(DFA::emptyRow());
-			for (char c : expression) {
-				DFA_COLUMN column{};
-				column[getSymbolValue(c)] = mDfa.getNumColumns() + 1;
-				mDfa.addColumn(column);
-			}
+			parse(expression);
 			DFA_COLUMN column{};
-			int lastColumn = mDfa.getNumColumns() + 1;
-			column[END_OF_LINE_CODE] = lastColumn;
+			column.fill(mDfa.getNumColumns());
 			mDfa.addColumn(column);
-			column.fill(lastColumn);
-			mDfa.addColumn(column);
-			mDfa.addEndState(lastColumn);
+
+			mDfa.addEndState(mDfa.getNumColumns() - 1);
 		}
 
-		bool match(const std::string &word) const { return mDfa.match(string2vec(word)); }
+		bool match(const std::string &word) const { 
+			if (mForceStart)
+				return mDfa.match(string2vec(word));
+
+			bool matched = false;
+			for (size_t i = 0; i < word.length() && !matched; i++) {
+				matched = mDfa.match(string2vec(word.substr(i)));
+			}
+			return matched; 
+		}
 
 	private:
+		void parse(const std::string &expression) {
+			for (size_t i = 0; i < expression.length(); i++) {
+				char c = expression.at(i);
+				DFA_COLUMN column{};
+				if (c == '.' && (i == 0 || expression.at(i-1) != '\\')) {
+					for (size_t j = 20; j <= 126; j++)
+						column[j] = mDfa.getNumColumns() + 1;
+				} else if (c == '$' && i == expression.length() - 1 && expression.at(i-1) != '\\') {
+					column[END_OF_LINE_CODE] = mDfa.getNumColumns() + 1;
+				} else if (c == '^' && i == 0) {
+					mForceStart = true;
+					continue;
+				} else {
+					column[getSymbolValue(c)] = mDfa.getNumColumns() + 1;
+				}
+				mDfa.addColumn(column);
+			}
+		}
+
 		int getSymbolValue(char c) const {
 			return int(c);
 		}
@@ -37,7 +59,9 @@ class RegexMatcher{
 			result.push_back(END_OF_LINE_CODE);
 			return result;
 		}
+
 		DFA mDfa;
+		bool mForceStart = false;
 };
 
 void printResult(std::string str, const RegexMatcher &matcher) {
@@ -45,13 +69,13 @@ void printResult(std::string str, const RegexMatcher &matcher) {
 }
 
 int main() {
-	RegexMatcher matcher("abc");
+	RegexMatcher matcher("^a.c");
 
-	printResult("ab", matcher);
-	printResult("c", matcher);
-	printResult("abc", matcher);
+	printResult("ac", matcher);
+	printResult("adc", matcher);
+	printResult("abcdef", matcher);
 	printResult("Hello World", matcher);
-	printResult("Something else", matcher);
+	printResult("deba*c", matcher);
 
 	return 0;
 }
